@@ -14,3 +14,5 @@ st790 advanced computing final project
 - MPC, advantage-uses cheap computation but a lot of interaction 
 - MPC replaces expensive computation with interaction between 2 or more parties 
 - 
+
+# more notes on approximate eigenvalues 

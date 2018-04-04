@@ -261,3 +261,27 @@ for(i in 1:length(matrix_sims)){
 }
 
 readr::write_csv(output, path = "~/workspace/diffuser/output/results.csv")
+
+# clean up ----------------------------------------------------------------
+library(dplyr)
+library(xtable)
+output <- read.csv("~/workspace/diffuser/output/results.csv")
+new_results <- output %>%
+  filter(n < 29000) %>%
+  mutate(object_size = object_size / 1.25e8, 
+         difference = 1000*(largest_eigen_new - largest_eigen_old)) %>%
+  select(n, object_size, time_old, time_new, difference)
+new_results$n <- round(new_results$n)
+new_results$object_size <- round(new_results$object_size, 4)
+xtable(new_results)
+
+library(ggplot2)
+library(ggthemes)
+results <- new_results %>%
+  select(n, time_old, time_new) %>%
+  rename(`Traditional Time` = time_old, 
+         `Adjusted Time` = time_new) %>%
+  tidyr::gather(type, time, -n) 
+ggplot(results, aes(x = n, y = time, group=type)) + geom_line(aes(linetype=type)) + geom_point(aes(shape=type)) + 
+  ggthemes::theme_base() + 
+  theme(legend.position="bottom")

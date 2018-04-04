@@ -1,39 +1,112 @@
+rm(list=ls())
 
 # subfunction for randomized svd ------------------------------------------
-
-Randomized_SVD <- function(A,k,q){
-  
+Randomized_SVD <- function(A, k = 6, nu = NULL, nv = NULL, p = 10, q = 2, sdist = "normal"){
+  # change matrix 
+  A <- as.matrix(A)
+  m <- nrow(A)
   n <- ncol(A)
-  #Stage A
-  #1
-  gauss_mat <- matrix( rnorm(n*(2*k),mean=0,sd=1), n, 2*k)
-  #2
-  Y <-  A %*% gauss_mat
-  #3
-  if( q > 0 ) {
-    for( i in 1:q) {
+  # flip matix if wide
+  if (m < n){ 
+    A <- t(A) # need to worry about complex inputs ? 
+    m <- nrow(A)
+    n <- ncol(A)
+    flipped <- TRUE
+  } else {
+    flipped <- FALSE
+  }
+  
+  # set target rank 
+  if(is.null(k)) k <- n 
+  if(k > n) k <-n
+  if(is.character(k)) stop("Target rank is not valid!")
+  if(k < 1) stop("Target rank is not valid!")
+  
+  # set oversampling parameter? 
+  l <- round(k) + round(p)
+  if(l > n) l <- n
+  if(l < 1) stop("Target rank is not valid!")
+  
+  # check array -- check results if this is an image
+  if(is.complex(A)) {
+    isreal <- FALSE
+  } else {
+    isreal <- TRUE
+  }
+  
+  # set number of singular vectors 
+  if(is.null(nu)) nu <- k
+  if(is.null(nv)) nv <- k
+  if(nu < 0) nu <- 0
+  if(nv < 0) nv <- 0
+  if(nu > k) nu <- k
+  if(nv > k) nv <- k
+  if(flipped==TRUE) {
+    temp <- nu
+    nu <- nv
+    nv <- temp
+  }
+  
+  
+  # create a random sampling matrix -----------------------------------------
+  O <- switch(sdist,
+              normal = matrix(stats::rnorm(l*n), n, l),
+              unif = matrix(stats::runif(l*n), n, l),
+              rademacher = matrix(sample(c(-1,1), (l*n), replace = TRUE, prob = c(0.5,0.5)), n, l),
+              stop("Selected sampling distribution is not supported!"))
+  
+  if(isreal==FALSE) {
+    O <- O + switch(sdist,
+                    normal = 1i * matrix(stats::rnorm(l*n), n, l),
+                    unif = 1i * matrix(stats::runif(l*n), n, l),
+                    rademacher = 1i * matrix(sample(c(-1,1), (l*n), replace = TRUE, prob = c(0.5,0.5)), n, l),
+                    stop("Selected sampling distribution is not supported!"))
+  }
+  
+  
+  # build sample matrix -----------------------------------------------------
+  Y <- A %*% O # should approximate the range of A 
+  remove(O)
+  
+  # orthogonalize Y using QR decomp -----------------------------------------
+  # q determines the number of subspace iterations 
+  if (q >0){
+    for(i in 1:q) {
       Y <- qr.Q( qr(Y, complete = FALSE) , complete = FALSE )
-      Z <- crossprod(A , Y )
+      Z <- crossprod(A , Y) # doesn't account for complex case
       Z <- qr.Q( qr(Z, complete = FALSE) , complete = FALSE )
       Y <- A %*% Z
-    }#End for
+    } 
     remove(Z)
-  }#End if
+  } 
+  
   Q <- qr.Q( qr(Y, complete = FALSE) , complete = FALSE )
   remove(Y)
   
   
-  #Stage B
-  #1
-  B <- t(Q) %*% A
-  #2
-  svd_B <- svd(B)
-  #3
-  U <- Q %*% svd_B$u
-  diags <- svd_B$d
+  # project to lower dim subspafce ------------------------------------------
+  B <- crossprod(Q, A)
   
-  ret_r_Svd <- list(U,diags)
-  return(ret_r_Svd)
+  
+  # singular value decomp ---------------------------------------------------
+  rsvdObj <- svd(B, nu=nu, nv=nv) # Compute SVD
+  rsvdObj$d <- rsvdObj$d[1:k] # Truncate singular values
+  
+  if(nu != 0) rsvdObj$u <- Q %*% rsvdObj$u # Recover left singular vectors
+  
+  
+  # if flipped because it was wide ------------------------------------------
+  if(flipped == TRUE) {
+    u_temp <- rsvdObj$u
+    rsvdObj$u <- rsvdObj$v
+    rsvdObj$v <- u_temp
+  }
+  
+  # return ------------------------------------------------------------------
+  if(nu == 0){ rsvdObj$u <- NULL}
+  if(nv == 0){ rsvdObj$v <- NULL}
+  
+  return(rsvdObj)
 }
 
 # subfunction for bandwidth for kernel ------------------------------------
@@ -53,7 +126,7 @@ epsilonCompute <- function(D,p=.01){
 
 
 # subfunction for diffusion map -------------------------------------------
-diffusionMapper <- function(D, neigen = 15, t = 0, maxdim = 50, delta = 10^{-5}){
+diffusionMapper <- function(D, neigen = 8, t = 0, maxdim = 50, delta = 10^{-5}){
   # calc parms
   eps.val <- epsilonCompute(D) # .122
   
@@ -90,9 +163,10 @@ diffusionMapper <- function(D, neigen = 15, t = 0, maxdim = 50, delta = 10^{-5})
   # 
   #  Use Randomized SVD instead
   output <- Randomized_SVD(A, k=neff, q=2)
-  eigenvals <- output[[2]]
-  psi <- output[[1]]
-  
+  eigenvals <- output$d
+  #print(eigenvals)
+  psi <- output$u
+  phi <- output$v
     
   cat('Computing Diffusion Coordinates\n')
   if(t<=0){# use multi-scale geometry
@@ -105,7 +179,7 @@ diffusionMapper <- function(D, neigen = 15, t = 0, maxdim = 50, delta = 10^{-5})
       eigenvals = eigenvals[1:(neigen+1)]  
       cat('Used default value:',neigen,'dimensions\n')
     }
-    X = psi[,2:(neigen+1)]*lambda[,1:neigen] #diffusion coords. X
+    X = psi[,2:(neigen+1)]*lambda[,1:(neigen)] #diffusion coords. X
   }
   else{# use fixed scale t
     lambda=eigenvals[-1]^t
@@ -118,13 +192,18 @@ diffusionMapper <- function(D, neigen = 15, t = 0, maxdim = 50, delta = 10^{-5})
       eigenvals = eigenvals[1:(neigen+1)]  
       cat('Used default value:',neigen,'dimensions\n')
     }
-    
-    X = psi[,2:(neigen+1)]*lambda[,1:neigen] #diffusion coords. X
+    X = psi[,2:(neigen+1)]*lambda[,1:(neigen)] #diffusion coords. X
   }
   
   # Let's also calculate the deviation from the original data set we fed into function 
-  
-  return(X)
+  #m <- dim(phi)[2]
+  #X_new = X %*% t(phi[,1:30])
+  #print(dim(X_new))
+  # Difference
+  #err <- Matrix::norm(X_new-D)/Matrix::norm(D)
+  #print(err)
+ # print(eigenvals)
+  return(list(X = X, largest_eigen = max(eigenvals)))
 }
 
 
@@ -133,18 +212,24 @@ library(diffusionMap)
 data("annulus")
 some_data <- dist(annulus)
 some_results <- diffusionMapper(some_data)
+some_results <- diffuse(some_data, neigen = 10)
+
 
 
 # simulation --------------------------------------------------------------
 
 # matrices to try 
+#matrix_sims <- c(10, 20)
 matrix_sims <- seq(1000, 30000, by=1000) # so 30 iterations in total
 output <- data.frame(n = matrix_sims, 
                      object_size = NA,
                      time_old = NA, 
                      time_new = NA, 
-                     )
+                     #largest_eigen_actual = NA, 
+                     largest_eigen_old = NA, 
+                     largest_eigen_new = NA)
 for(i in 1:length(matrix_sims)){
+  cat("working on sim #: ", i)
   n <- matrix_sims[i] 
   t <- runif(n)^.7*10 
   al <- .15
@@ -153,14 +238,26 @@ for(i in 1:length(matrix_sims)){
   x1 <- bet*exp(al*t)*cos(t)+rnorm(n,0,.1)
   y1 <- bet*exp(al*t)*sin(t)+rnorm(n,0,.1)
   plot(x1, y1, pch=20, main="Noisy spiral")
-  D <- dist(cbind(x1, y1))
-  output$object_size[i] <- object_size(D)
+  D <- as.matrix(dist(cbind(x1, y1)))
+  output$object_size[i] <- object.size(D)
   # the original 
-  original <- system.time(dmap_old <- diffusionMap::diffuse(D, neigen=10))
+  original <- system.time(dmap_old <- diffusionMap::diffuse(D, neigen=5))
   output$time_old[i] <- as.numeric(original[3])
-  new <- system.time(diffusionMapper(D, neigen = 10))
-  new$time_new[i] <- as.numeric(new[3])
+  eigen_va <- dim(dmap_old$X)[2]
+  new <- system.time(dmap_new <- diffusionMapper(D, neigen = eigen_va))
+  output$time_new[i] <- as.numeric(new[3])
   # viz 
-  
+  filename <- paste0("~/workspace/diffuser/output/image_",n,".png") 
+  png(filename)
+  par(mfrow=c(1,2))
+  plot(dmap_old$X, main = "Traditional Diffusion")
+  plot(dmap_new$X, main = "With Randomized SVD")
+  dev.off()
+  # store largest eigen 
+  #out <- svd(D)$d[1]
+  #output$largest_eigen_actual[i] <- out
+  output$largest_eigen_old[i] <- max(dmap_old$eigenvals) 
+  output$largest_eigen_new[i] <- max(dmap_new$largest_eigen)
 }
 
+readr::write_csv(output, path = "~/workspace/diffuser/output/results.csv")

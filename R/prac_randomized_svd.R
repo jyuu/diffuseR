@@ -134,3 +134,5 @@ if(flipped == TRUE) {
 # return ------------------------------------------------------------------
 if(nu == 0){ rsvdObj$u <- NULL}
 if(nv == 0){ rsvdObj$v <- NULL}
+
+

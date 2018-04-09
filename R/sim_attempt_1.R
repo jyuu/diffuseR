@@ -82,7 +82,7 @@ Randomized_SVD <- function(A, k = 6, nu = NULL, nv = NULL, p = 10, q = 2, sdist 
   
   Q <- qr.Q( qr(Y, complete = FALSE) , complete = FALSE )
   remove(Y)
-  
+  # NOTE the computation of Y is vulnerable to round off errors!! 
   
   # project to lower dim subspafce ------------------------------------------
   B <- crossprod(Q, A)

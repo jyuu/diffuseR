@@ -141,8 +141,8 @@ if(is.null(neigen)){
 # eigendecomposition using ARPACK
 decomp = igraph::arpack(f,extra=Asp,sym=TRUE,
                 options=list(which='LA',nev=neff,n=n,ncv=max(min(c(n,4*neff)))))
-psi = decomp$vectors/(decomp$vectors[,1]%*%matrix(1,1,neff))#right ev
-phi = decomp$vectors * (decomp$vectors[,1]%*%matrix(1,1,neff))#left ev
+psi = decomp$vectors/(decomp$vectors[,1]%*%matrix(1,1,51))#right ev
+phi = decomp$vectors * (decomp$vectors[,1]%*%matrix(1,1,51))#left ev
 eigenvals = decomp$values #eigenvalues
 
 cat('Computing Diffusion Coordinates\n')

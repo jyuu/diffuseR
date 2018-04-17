@@ -234,7 +234,7 @@ profvis({
     as.matrix(A %*% x)
   }
   igraph::arpack(f,extra=some_data,sym=TRUE,
-                  options=list(which='LA',nev=50,n=50,ncv=max(min(c(1000,4*50)))))
+                  options=list(which='LA',nev=50,n=1000,ncv=min(c(1000,4*50))))
 })
 
 

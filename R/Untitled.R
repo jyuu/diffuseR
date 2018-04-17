@@ -9,15 +9,12 @@
 #file <- "/Users/jcahoon/Downloads/Sec_6.1/Patch/"
 #ex <- "npatchJ August.mat"
 #readMat(paste0(file, ex))
-file <- "/Users/jcahoon/workspace/diffuser/raw/"
+#file <- "/Users/jcahoon/workspace/diffuser/raw/"
+file <- "/home/joyce/workspace/diffuser/raw/"
 ex <- "oct_chg.dat"
 ex2 <- "nov.dat"
 X <- read.table(paste0(file, ex), sep=",")
 Y <- read.table(paste0(file, ex2), sep=",")
-
-# need to convert to mat 6 ------------------------------------------------
-# done 
-
 
 # eps values --------------------------------------------------------------
 ep.aug = 0.233972639306330;
@@ -30,10 +27,15 @@ num_eig = 20;
 # diffusion time 
 t = 1;
 # make the symmetric diffusion kernals 
-D <- as.matrix(dist(X))
-K <- exp(-D^2)/ep.octc # kernal
-v <- sqrt(apply(K, 1, sum)) # normalize
-A <- K/(v%*%t(v))
+D.X <- as.matrix(dist(X))
+K.X <- exp((-D.X^2)/ep.octc^2) # kernal
+v.X <- sqrt(apply(K.X, 1, sum)) # normalize
+A.X <- K.X/(v.X%*%t(v.X))
+# make the same symmetric diffusion kernals for Y 
+D.Y <- as.matrix(dist(Y))
+K.Y <- exp((-D.Y^2)/ep.nov^2) # kernal
+v.Y <- sqrt(apply(K.Y, 1, sum)) # normalize
+A.Y <- K.Y/(v.Y%*%t(v.Y))
 # set epsilon to make into sparse matrix
 delta <- 10^{-5}
 n <- dim(D)[1]

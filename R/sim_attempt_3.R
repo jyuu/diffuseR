@@ -23,39 +23,10 @@ Randomized_SVD <- function(A, k = 6, nu = NULL, nv = NULL, p = 10, q = 2, sdist 
   m <- nrow(A)
   n <- ncol(A)
   
-  # flip matix if wide
-  if (m < n){ 
-    A <- t(A) 
-    m <- nrow(A)
-    n <- ncol(A)
-    flipped <- TRUE
-  } else {
-    flipped <- FALSE
-  }
-  
-  # set target rank 
-  if(is.null(k)) k <- n 
-  if(k > n) k <- n
-  if(is.character(k)) stop("Target rank is not valid!")
-  if(k < 1) stop("Target rank is not valid!")
-  
   # set oversampling parameter
   l <- round(k) + round(p)
   if(l > n) l <- n
   if(l < 1) stop("Target rank is not valid!")
-  
-  # set number of singular vectors 
-  if(is.null(nu)) nu <- k
-  if(is.null(nv)) nv <- k
-  if(nu < 0) nu <- 0
-  if(nv < 0) nv <- 0
-  if(nu > k) nu <- k
-  if(nv > k) nv <- k
-  if(flipped == TRUE) {
-    temp <- nu
-    nu <- nv
-    nv <- temp
-  }
   
   # create a random sampling matrix
   O <- switch(sdist,
@@ -93,16 +64,8 @@ Randomized_SVD <- function(A, k = 6, nu = NULL, nv = NULL, p = 10, q = 2, sdist 
   # rsvdObj <- irlba::irlba(Bs, nu=nu, nv=nv, matmul=matmul) # Compute SVD
   # rsvdObj$d <- rsvdObj$d[1:k] # Truncate singular values
   # 
-  if(nu != 0) rsvdObj$u <- Q %*% rsvdObj$u # Recover left singular vectors
   
-  # deal with flipped case
-  if(flipped == TRUE) {
-    u_temp <- rsvdObj$u
-    rsvdObj$u <- rsvdObj$v
-    rsvdObj$v <- u_temp
-  }
-  if(nu == 0){ rsvdObj$u <- NULL }
-  if(nv == 0){ rsvdObj$v <- NULL }
+  rsvdObj$u <- Q %*% rsvdObj$u # Recover left singular vectors
   return(rsvdObj)
 }
 
@@ -159,11 +122,13 @@ epsilonCompute <- function(D,p=.01){
 
 
 # subfunction for diffusion map -------------------------------------------
-diffusionMapper <- function(D, neigen = 8, t = 0, maxdim = 50, delta = 10^{-5}){
+diffusionMapper <- function(D, neigen = 8, t = 0, maxdim = 50, delta = 10^{-5}, eps.val = NULL){
   
   # calc parms
-  eps.val <- epsilonCompute(D) # .122
-  
+  if(is.null(eps.val)){
+    eps.val <- epsilonCompute(D) # .122
+  }
+                            
   # make matrix structure 
   D <- as.matrix(D)
   n <- dim(D)[1]
@@ -241,15 +206,93 @@ diffusionMapper <- function(D, neigen = 8, t = 0, maxdim = 50, delta = 10^{-5}){
 }
 
 
+diffusionMapper2 <- function(D, neigen = 8, t = 0, maxdim = 50, delta = 10^{-5}, eps.val = NULL){
+  
+  # calc parms
+  if(is.null(eps.val)){
+    eps.val <- epsilonCompute(D) # .122
+  }
+  
+  # make matrix structure 
+  D <- as.matrix(D)
+  n <- dim(D)[1]
+  K <- exp(-D^2)/eps.val # kernal
+  v <- sqrt(apply(K, 1, sum)) # normalize
+  A <- K/(v%*%t(v))
+  
+  # make A sparse
+  ind <- which(A > delta, arr.ind = TRUE)
+  Asp <- Matrix::sparseMatrix(i = ind[,1], j = ind[,2], x = A[ind], dims=c(n,n))
+  
+  # # see:http://li.mit.edu/Archive/Activities/Archive/CourseWork/Ju_Li/MITCourses/18.335/Doc/ARPACK/Lehoucq97.pdf
+  f <- function(x, A = NULL){ # matrix multiplication for ARPACK
+    as.matrix(A %*% x)
+  }
+
+  cat('Performing eigendecomposition\n') # eigendecomposition
+  if(is.null(neigen)){ 
+    neff = min(maxdim+1,n)  
+  }else{
+    neff = neigen+1
+    #neff =  min(neigen+1, n)
+  }
+  
+  # eigendecomposition using ARPACK
+  decomp = igraph::arpack(f,extra=Asp,sym=TRUE,
+                          options=list(which='LA',nev=neff,n=n,ncv=max(min(c(n,4*neff)))))
+  psi = decomp$vectors/(decomp$vectors[,1]%*%matrix(1,1,neff))#right ev
+  phi = decomp$vectors * (decomp$vectors[,1]%*%matrix(1,1,neff))#left ev
+  eigenvals = decomp$values #eigenvalues
+  # 
+  #  Use Randomized SVD instead
+  # output <- Randomized_SVD(A, k=neff, q=2)
+  # eigenvals <- output$d
+  #print(eigenvals)
+  # psi <- output$u
+  # phi <- output$v
+  
+  cat('Computing Diffusion Coordinates\n')
+  if(t<=0){# use multi-scale geometry
+    lambda=eigenvals[-1]/(1-eigenvals[-1])
+    lambda=rep(1,n)%*%t(lambda)
+    if(is.null(neigen)){#use no. of dimensions corresponding to 95% dropoff
+      lam = lambda[1,]/lambda[1,1]
+      neigen = min(which(lam<.05)) # default number of eigenvalues
+      neigen = min(neigen,maxdim)
+      eigenvals = eigenvals[1:(neigen+1)]  
+      cat('Used default value:',neigen,'dimensions\n')
+    }
+    X = psi[,2:(neigen+1)]*lambda[,1:(neigen)] #diffusion coords. X
+  }
+  else{# use fixed scale t
+    lambda=eigenvals[-1]^t
+    lambda=rep(1,n)%*%t(lambda)
+    
+    if(is.null(neigen)){#use no. of dimensions corresponding to 95% dropoff
+      lam = lambda[1,]/lambda[1,1]
+      neigen = min(which(lam<.05)) # default number of eigenvalues
+      neigen = min(neigen,maxdim)
+      eigenvals = eigenvals[1:(neigen+1)]  
+      cat('Used default value:',neigen,'dimensions\n')
+    }
+    X = psi[,2:(neigen+1)]*lambda[,1:(neigen)] #diffusion coords. X
+  }
+  
+  return(list(X = X, largest_eigen = max(eigenvals)))
+}
+
+
 # try it  -----------------------------------------------------------------
 library(diffusionMap)
 data("annulus")
 some_data <- dist(annulus)
+#some_results <- diffuse(some_data, neigen = 8)
 some_results <- diffusionMapper(some_data)
-some_results <- diffuse(some_data, neigen = 8)
+some_results <- diffusionMapper2(some_data)
 
 library(microbenchmark)
-joyce <- microbenchmark(diffusionMapper(some_data), 
+joyce <- microbenchmark(diffusionMapper(some_data, eps.val = .01), 
+                        diffusionMapper2(some_data), 
                         diffuse(some_data, neigen = 8), 
                         times = 5)
 
@@ -260,7 +303,7 @@ profvis({
 })
 
 profvis({
-  diffusionMapper(some_data)
+  diffusionMapper(some_data, eps.val = .01)
 })
 
 profvis({

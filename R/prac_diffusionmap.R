@@ -1,4 +1,4 @@
-
+rm(list=ls())
 # Load library ------------------------------------------------------------
 library(diffusionMap)
 library(scatterplot3d)
@@ -86,6 +86,7 @@ system.time(dmap <- diffuse(D, neigen=10))
 # track time for various sizes of D
 
 # try it with annulus -----------------------------------------------------
+rm(list=ls())
 data("annulus")
 plot(annulus, main="Annulus Data", pch=20, cex=.7)
 D <- dist(annulus)
@@ -160,7 +161,7 @@ if(t<=0){# use multi-scale geometry
 }
 else{# use fixed scale t
   lambda=eigenvals[-1]^t
-  lambda=rep(1,n)%*%t(lambda)
+  lambda=rep(1,n)%*%t(lambda) # sum all the lambda values raised to t 
   
   if(is.null(neigen)){#use no. of dimensions corresponding to 95% dropoff
     lam = lambda[1,]/lambda[1,1]
@@ -169,7 +170,6 @@ else{# use fixed scale t
     eigenvals = eigenvals[1:(neigen+1)]  
     cat('Used default value:',neigen,'dimensions\n')
   }
-  
   X = psi[,2:(neigen+1)]*lambda[,1:neigen] #diffusion coords. X
 }
 

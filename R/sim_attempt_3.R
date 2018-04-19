@@ -1,14 +1,31 @@
 rm(list=ls())
 
+
+# load --------------------------------------------------------------------
+library(rARPACK)
+
+# set parsm for testing
+
+# k = 6
+# nu = NULL 
+# nv = NULL
+# p = 10
+# q = 2
+# sdist = "normal"
+# A <- matrix(rnorm(100), 10)
+
 # subfunction for randomized svd ------------------------------------------
+
 Randomized_SVD <- function(A, k = 6, nu = NULL, nv = NULL, p = 10, q = 2, sdist = "normal"){
+  
   # change matrix 
   A <- as.matrix(A)
   m <- nrow(A)
   n <- ncol(A)
+  
   # flip matix if wide
   if (m < n){ 
-    A <- t(A) # need to worry about complex inputs ? 
+    A <- t(A) 
     m <- nrow(A)
     n <- ncol(A)
     flipped <- TRUE
@@ -18,21 +35,14 @@ Randomized_SVD <- function(A, k = 6, nu = NULL, nv = NULL, p = 10, q = 2, sdist 
   
   # set target rank 
   if(is.null(k)) k <- n 
-  if(k > n) k <-n
+  if(k > n) k <- n
   if(is.character(k)) stop("Target rank is not valid!")
   if(k < 1) stop("Target rank is not valid!")
   
-  # set oversampling parameter? 
+  # set oversampling parameter
   l <- round(k) + round(p)
   if(l > n) l <- n
   if(l < 1) stop("Target rank is not valid!")
-  
-  # check array -- check results if this is an image
-  if(is.complex(A)) {
-    isreal <- FALSE
-  } else {
-    isreal <- TRUE
-  }
   
   # set number of singular vectors 
   if(is.null(nu)) nu <- k
@@ -41,78 +51,96 @@ Randomized_SVD <- function(A, k = 6, nu = NULL, nv = NULL, p = 10, q = 2, sdist 
   if(nv < 0) nv <- 0
   if(nu > k) nu <- k
   if(nv > k) nv <- k
-  if(flipped==TRUE) {
+  if(flipped == TRUE) {
     temp <- nu
     nu <- nv
     nv <- temp
   }
   
-  
-  # create a random sampling matrix -----------------------------------------
+  # create a random sampling matrix
   O <- switch(sdist,
               normal = matrix(stats::rnorm(l*n), n, l),
               unif = matrix(stats::runif(l*n), n, l),
               rademacher = matrix(sample(c(-1,1), (l*n), replace = TRUE, prob = c(0.5,0.5)), n, l),
               stop("Selected sampling distribution is not supported!"))
   
-  if(isreal==FALSE) {
-    O <- O + switch(sdist,
-                    normal = 1i * matrix(stats::rnorm(l*n), n, l),
-                    unif = 1i * matrix(stats::runif(l*n), n, l),
-                    rademacher = 1i * matrix(sample(c(-1,1), (l*n), replace = TRUE, prob = c(0.5,0.5)), n, l),
-                    stop("Selected sampling distribution is not supported!"))
-  }
+  # building the sampling matrix
+  Y <- A %*% O 
+  rm(O) 
   
-  
-  # build sample matrix -----------------------------------------------------
-  Y <- A %*% O # should approximate the range of A 
-  remove(O)
-  
-  # orthogonalize Y using QR decomp -----------------------------------------
   # q determines the number of subspace iterations 
-  if (q >0){
+  if (q > 0){
     for(i in 1:q) {
-      Y <- qr.Q( qr(Y, complete = FALSE) , complete = FALSE )
-      Z <- crossprod(A , Y) # doesn't account for complex case
-      Z <- qr.Q( qr(Z, complete = FALSE) , complete = FALSE )
+      Y <- qr.Q( qr(Y, complete = FALSE) , complete = FALSE)
+      Z <- crossprod(A , Y)
+      Z <- qr.Q( qr(Z, complete = FALSE) , complete = FALSE)
       Y <- A %*% Z
     } 
-    remove(Z)
-  } 
+    rm(Z)
+  }
   
-  Q <- qr.Q( qr(Y, complete = FALSE) , complete = FALSE )
-  remove(Y)
-  # NOTE the computation of Y is vulnerable to round off errors!! 
+  Q <- qr.Q(qr(Y, complete = FALSE) , complete = FALSE)
+  rm(Y) # NOTE the computation of Y is vulnerable to round off errors!! 
   
-  # project to lower dim subspafce ------------------------------------------
+  # project to lower dimensional subspace
   B <- crossprod(Q, A)
   
-  # singular value decomp ---------------------------------------------------
-  #rsvdObj <- svd(B, nu=nu, nv=nv) # Compute SVD
-  Bs <- as(B, "dgCMatrix")
-  matmul = function(A, B, transpose = FALSE)
-  {
-    if(transpose) as.numeric(crossprod(A, B)) else as.numeric(A %*% B);
-  }
-  rsvdObj <- irlba::irlba(Bs, nu=nu, nv=nv, matmul=matmul) # Compute SVD
-  rsvdObj$d <- rsvdObj$d[1:k] # Truncate singular values
-  
+  rsvdObj <- rARPACK::svds(B, k) # Compute SVD
+  # Bs <- as(B, "dgCMatrix")
+  # matmul = function(A, B, transpose = FALSE){
+  #   if(transpose) as.numeric(crossprod(A, B)) else as.numeric(A %*% B);
+  # }
+  # rsvdObj <- irlba::irlba(Bs, nu=nu, nv=nv, matmul=matmul) # Compute SVD
+  # rsvdObj$d <- rsvdObj$d[1:k] # Truncate singular values
+  # 
   if(nu != 0) rsvdObj$u <- Q %*% rsvdObj$u # Recover left singular vectors
   
-  
-  # if flipped because it was wide ------------------------------------------
+  # deal with flipped case
   if(flipped == TRUE) {
     u_temp <- rsvdObj$u
     rsvdObj$u <- rsvdObj$v
     rsvdObj$v <- u_temp
   }
-  
-  # return ------------------------------------------------------------------
-  if(nu == 0){ rsvdObj$u <- NULL}
-  if(nv == 0){ rsvdObj$v <- NULL}
-  
+  if(nu == 0){ rsvdObj$u <- NULL }
+  if(nv == 0){ rsvdObj$v <- NULL }
   return(rsvdObj)
 }
+
+
+# # check speed  ------------------------------------------------------------
+# library(profvis)
+# library(microbenchmark)
+# 
+# A <- matrix(rnorm(1e8), 1e4)
+# other_SVD <- function (A){
+#   f <- function(x, A = NULL){ # matrix multiplication for ARPACK
+#      as.matrix(A %*% x)
+#    }
+#   output <- igraph::arpack(f,extra=A,sym=TRUE,
+#                         options=list(which='LA',nev=20,n=1000,ncv=min(c(1000,4*20))))
+#   return(output)
+# }
+# other_SVD(A)
+# 
+# joyce <- microbenchmark(other_SVD(A),
+#                         Randomized_SVD(A), times = 3)
+# 
+# 
+# # compare arpack with svd -------------------------------------------------
+# A <- matrix(rnorm(1e6), 1e3)
+# temp_ar <- function(A){
+#   eigs_sym(A, k = 5, which = "LM", opts = list(retvec = TRUE))
+# }
+# B <- svd(A, 5)
+# 
+# joyce <- microbenchmark(svds(A, k =5),
+#                         svd(A), times = 3)
+# 
+# # sanity check answers
+# kevin <- svds(A, k=5)
+# joyce <- temp_ar(A)
+# 
+# joyce$vectors
 
 # subfunction for bandwidth for kernel ------------------------------------
 
@@ -132,6 +160,7 @@ epsilonCompute <- function(D,p=.01){
 
 # subfunction for diffusion map -------------------------------------------
 diffusionMapper <- function(D, neigen = 8, t = 0, maxdim = 50, delta = 10^{-5}){
+  
   # calc parms
   eps.val <- epsilonCompute(D) # .122
   
@@ -217,15 +246,21 @@ library(diffusionMap)
 data("annulus")
 some_data <- dist(annulus)
 some_results <- diffusionMapper(some_data)
-some_results <- diffuse(some_data, neigen = 10)
+some_results <- diffuse(some_data, neigen = 8)
+
+library(microbenchmark)
+joyce <- microbenchmark(diffusionMapper(some_data), 
+                        diffuse(some_data, neigen = 8), 
+                        times = 5)
 
 # where is the bottle neck ?
+library(profvis)
 profvis({
   some_results <- diffuse(some_data, neigen = 10)
 })
 
 profvis({
-  Randomized_SVD(some_data, k=18, q=2)
+  diffusionMapper(some_data)
 })
 
 profvis({

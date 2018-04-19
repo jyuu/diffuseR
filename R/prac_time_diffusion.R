@@ -6,6 +6,52 @@ library(scatterplot3d)
 
 # params ------------------------------------------------------------------
 n <- 1000
+m <- 9 
+k <- 100
+l <- 200 
+lt <- 200 
+eps <- .001 
+
+
+# arrays ------------------------------------------------------------------
+x <- array(NA, c(2e6))
+r <- array(NA, c(1e5))
+u <- array(NA, c(1e7))
+s <- array(NA, c(1e5))
+w <- array(NA, c(2e8))
+
+
+# knngauss ----------------------------------------------------------------
+nd
+n
+nk
+eps 
+
+x <- array(NA, c(nd, 1))
+z <- array(NA, c(nk, 1))
+iz <- array(NA, c(nk, 1))
+jz <- array(NA, c(nk, 1))
+w <- array(NA, 1)
+
+# naiveknn
+id <- 1 
+ld <- n+100
+iidx <- id + ld
+lidx <- n + 100
+
+
+for(j in 1:n){
+  for (i in 1:nk){
+    z[i,j] <- dexp(-z[i,j]/eps)
+  }
+}
+
+for(j in 1:n){
+  for(i in 1:nk){
+    jz[i,j] <- j
+  }
+}
+
 
 # generate points uniformly on disk ---------------------------------------
 # # naive
@@ -16,6 +62,7 @@ n <- 1000
 # y <- r*sin(theta)
 # # viz 
 # plot(x,y) # too concentrated at the center 
+n <- 1000
 r <- sqrt(runif(n))
 theta <- 2*pi*runif(n)
 # convert to cartesian
@@ -56,22 +103,110 @@ plot(x1, y1)
 plot(x2, y2)
 
 # compile it  -------------------------------------------------------------
-X <- array(NA, c(n, 2, 9))
-for(i in 1:9){
-  X[,1,i] <- eval(parse(text = paste0("x",i)))
-  X[,2,i] <- eval(parse(text = paste0("y",i)))
-}
-# trajectory for a single point
-one <- t(X[100,,])
-plot(one)
-lines(one)
+# X <- array(NA, c(n, 2, 9))
+# for(i in 1:9){
+#   X[,1,i] <- eval(parse(text = paste0("x",i)))
+#   X[,2,i] <- eval(parse(text = paste0("y",i)))
+# }
+# # trajectory for a single point
+# one <- t(X[100,,])
+# plot(one)
+# lines(one)
 
+# compute diffusion map manually ------------------------------------------
+D <- as.matrix(dist(cbind(y1, x1)))
+n <- dim(D)[1]
+eps.val <- .001
+K <- exp(-D^2)/eps.val # kernal
+v <- sqrt(apply(K, 1, sum)) # normalize
+A <- K/(v%*%t(v))
+output <- svd(A)
+# test <- A %*% output$u
+# test2 <- output$u %*% diag(output$d)
+right <- output$u 
+d <- diag(output$d)
+neff <- 10
+v <- right[, 1:neff]
+lambda <- output$d[1:neff]
+# now this 
+v <- v/sqrt(sum(v^2))
+Psi <- d %*% v
+dm <- Psi / sqrt(sum(Psi^2)) * lambda
 # compute diffusion map ---------------------------------------------------
-c1 <- diffuse(dist(cbind(y1,x1)))
+c1 <- diffuse(dist(cbind(x1,y1)), eps.val = .001, t= 9)
 plot(c1)
-c1 <- diffuse(dist(cbind(y1,x1)))
-plot(c1)
+c1 <- diffuse(dist(cbind(y1,x1)), t = 9)
+scatterplot3d(c1$X[,3:6])
 
+# manual computation ------------------------------------------------------
+D <- dist(cbind(y1, x1))
+# set parms
+#eps.val <- epsilonCompute(D) # .122
+eps.val <- .001
+neigen <- NULL
+t <- 9
+maxdim <- 50
+delta <- 10^{-5}
+
+# make matrix structure 
+D <- as.matrix(D)
+n <- dim(D)[1]
+K <- exp(-D^2)/eps.val # kernal
+v <- sqrt(apply(K, 1, sum)) # normalize
+A <- K/(v%*%t(v))
+
+# make A sparse
+ind <- which(A > delta, arr.ind = TRUE)
+Asp <- Matrix::sparseMatrix(i = ind[,1], j = ind[,2], x = A[ind], dims=c(n,n))
+
+# see:http://li.mit.edu/Archive/Activities/Archive/CourseWork/Ju_Li/MITCourses/18.335/Doc/ARPACK/Lehoucq97.pdf
+f <- function(x, A = NULL){ # matrix multiplication for ARPACK
+  as.matrix(A %*% x)
+}
+
+cat('Performing eigendecomposition\n') # eigendecomposition
+if(is.null(neigen)){ 
+  neff = min(maxdim+1,n)  
+}else{
+  neff =  min(neigen+1, n)
+}
+
+# eigendecomposition using ARPACK
+decomp = igraph::arpack(f,extra=Asp,sym=TRUE,
+                        options=list(which='LA',nev=neff,n=n,ncv=max(min(c(n,4*neff)))))
+psi = decomp$vectors/(decomp$vectors[,1]%*%matrix(1,1,51))#right ev
+phi = decomp$vectors * (decomp$vectors[,1]%*%matrix(1,1,51))#left ev
+eigenvals = decomp$values #eigenvalues
+
+cat('Computing Diffusion Coordinates\n')
+if(t<=0){# use multi-scale geometry
+  lambda=eigenvals[-1]/(1-eigenvals[-1])
+  lambda=rep(1,n)%*%t(lambda)
+  if(is.null(neigen)){#use no. of dimensions corresponding to 95% dropoff
+    lam = lambda[1,]/lambda[1,1]
+    neigen = min(which(lam<.05)) # default number of eigenvalues
+    neigen = min(neigen,maxdim)
+    eigenvals = eigenvals[1:(neigen+1)]  
+    cat('Used default value:',neigen,'dimensions\n')
+  }
+  X = psi[,2:(neigen+1)]*lambda[,1:neigen] #diffusion coords. X
+}
+else{# use fixed scale t
+  lambda=eigenvals[-1]^t
+  lambda=rep(1,n)%*%t(lambda) # sum all the lambda values raised to t 
+  
+  if(is.null(neigen)){#use no. of dimensions corresponding to 95% dropoff
+    lam = lambda[1,]/lambda[1,1]
+    neigen = min(which(lam<.05)) # default number of eigenvalues
+    neigen = min(neigen,maxdim)
+    eigenvals = eigenvals[1:(neigen+1)]  
+    cat('Used default value:',neigen,'dimensions\n')
+  }
+  X = psi[,2:(neigen+1)]*lambda[,1:neigen] #diffusion coords. X
+}
+plot(X)
+
+# others ------------------------------------------------------------------
 c5 <- diffuse(dist(cbind(y5,x5)))
 plot(c5)
 c9 <- diffuse(dist(cbind(y9,x9)))

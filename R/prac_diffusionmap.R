@@ -4,13 +4,19 @@ library(diffusionMap)
 library(scatterplot3d)
 
 # Ex 1 --------------------------------------------------------------------
-t <- seq(-pi, pi, .01)
+t <- seq(-pi, pi, .001)
 x <- cbind(cos(t), sin(t))
 y <- cos(3*t) + rnorm(length(t), 0, .1)
 tcol <- topo.colors(32)
 colvec <- floor((y-min(y))/(max(y)-min(y))*32)
 colvec[colvec==0] <- 1
-scatterplot3d(x[,1], x[,2], y, color=tcol[colvec], pch=20, 
+scatterplot3d(x[,1], x[,2], y, highlight.3d = T, pch=20, 
+              xlab = NULL, ylab=NULL, main =NULL, grid=FALSE, 
+              tick.marks = FALSE,
+              axis=FALSE)
+#D <- as.matrix(dist(cbind(x,y)))
+D <- as.matrix(dist(x))
+#scatterplot3d(x[,1], x[,2], y, color=tcol[colvec], pch=20, 
               main="Cosine function supported on circle", angle=55,
               cex.main=2, col.axis="gray", cex.symbols=2, cex.lab=2,
               xlab=expression("x"[1]), ylab=expression("x"[2]), zlab="y")

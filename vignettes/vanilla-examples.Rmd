@@ -1,0 +1,153 @@
+---
+title: "Classic examples"
+output:
+  rmarkdown::html_vignette:
+    fig_caption: yes
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r load, warning=FALSE, message=FALSE}
+library(diffuseR)
+library(scatterplot3d)
+library(diffusionMap)
+```
+A few other examples that demonstrate the performance of diffusion maps with randomized SVD against traditional diffusion maps. 
+
+# Trefoil knot 
+
+A nontrival knot that we generate as shown below. 
+
+```{r, message=FALSE, warning=FALSE}
+t <- runif(1000, 0, 2*pi)
+x <- (2 + cos(3*t))*cos(2*t)
+y <- (2 + cos(3*t))*sin(2*t)
+z <- sin(3*t)
+
+# Viz 
+scatterplot3d(x, y, z, 
+              highlight.3d = T,
+              xlab = NULL, 
+              ylab = NULL, 
+              main = NULL, 
+              grid = FALSE,
+              tick.marks = FALSE,
+              axis = FALSE)
+```
+
+As shown the diffusion coordinates from our adapted diffusion map algorithm with randomized SVD does not unravel this knot as well as that of the traditional mapping: 
+
+```{r, message=FALSE, warning=FALSE}
+D <- as.matrix(dist(cbind(x, y, z)))
+trefoil_new <- diffuseR::diffusionmapRsvd(D)$X
+trefoil_old <- diffusionMap::diffuse(D)$X
+# For viz
+rbPal <- colorRampPalette(c('red','black'))
+col_new <- rbPal(15)[as.numeric(cut(trefoil_new[,1],breaks = 15))]
+col_old <- rbPal(15)[as.numeric(cut(trefoil_old[,1],breaks = 15))]
+# Plot 
+par(mfrow = c(1,2))
+plot(trefoil_new[,1], trefoil_new[,2], pch = 20, col = col_new, axes = FALSE, ann = FALSE)
+plot(trefoil_old[,1], trefoil_old[,2], pch = 20, col = col_old, axes = FALSE, ann = FALSE)
+```
+
+# Chainlink
+
+Here's another classical dataset from the $\texttt{diffusionMap}$ package where there are clearly two different classes, but they are entangled. 
+
+```{r, message=FALSE, warning=FALSE}
+data("Chainlink")
+lab.col <- c(rep("red",500), rep("black",500))
+scatterplot3d(Chainlink$C1, Chainlink$C2, Chainlink$C3,
+              color = lab.col,
+              pch = 20,
+              xlab = NULL, 
+              ylab = NULL, 
+              main = NULL, 
+              grid = FALSE,
+              tick.marks = FALSE,
+              axis = FALSE) 
+```
+
+When we apply our adapted diffusion map, again see the same issues: 
+
+```{r, message=FALSE, warning=FALSE}
+D <- as.matrix(dist(Chainlink))
+chain_new <- diffuseR::diffusionmapRsvd(D)$X
+chain_old <- diffusionMap::diffuse(D)$X
+# For viz
+rbPal <- colorRampPalette(c('red','black'))
+col_new <- rbPal(15)[as.numeric(cut(chain_new[,1],breaks = 15))]
+col_old <- rbPal(15)[as.numeric(cut(chain_old[,1],breaks = 15))]
+# Plot 
+par(mfrow = c(1,2))
+plot(chain_new[,1], chain_new[,2], pch = 20, col = col_new, axes = FALSE, ann = FALSE)
+plot(chain_old[,1], chain_old[,2], pch = 20, col = col_old, axes = FALSE, ann = FALSE)
+```
+
+# Swiss roll
+
+This classic dataset is relied upon for testing various dimensionality reduction algos. 
+
+```{r, message=FALSE, warning=FALSE}
+n <- 800
+t <- (3*pi/2)*(1+2*runif(n))
+X <- cbind(t*cos(t), runif(n), t*sin(t))
+scatterplot3d(X, highlight.3d = TRUE, 
+              pch = 20,
+              xlab = NULL, 
+              ylab = NULL, 
+              main = NULL, 
+              grid = FALSE,
+              tick.marks = FALSE,
+              axis = FALSE)
+```
+
+Again, the differences between utilizing our adapted diffusion map algorithm against that provided by the $\texttt{diffusionMap}$ package: 
+
+```{r, message=FALSE, warning=FALSE}
+D <- as.matrix(dist(X))
+swiss_new <- diffuseR::diffusionmapRsvd(D)$X
+swiss_old <- diffusionMap::diffuse(D)$X
+# For viz
+rbPal <- colorRampPalette(c('red','black'))
+col_new <- rbPal(15)[as.numeric(cut(swiss_new[,1],breaks = 15))]
+col_old <- rbPal(15)[as.numeric(cut(swiss_old[,1],breaks = 15))]
+# Plot 
+par(mfrow = c(1,2))
+plot(swiss_new[,1], swiss_new[,2], pch = 20, col = col_new, axes = FALSE, ann = FALSE)
+plot(swiss_old[,1], swiss_old[,2], pch = 20, col = col_old, axes = FALSE, ann = FALSE)
+```
+
+# Annulus 
+
+Another classical example utilized in convex analysis is the annulus data set. It consists of a region bounded by two circles like so:
+
+```{r, message=FALSE, warning=FALSE}
+data("annulus")
+X <- annulus
+plot(X, axes = F, pch = 20, ann = F)
+```
+
+```{r, message=FALSE, warning=FALSE}
+D <- as.matrix(dist(X))
+ann_new <- diffuseR::diffusionmapRsvd(D)$X
+ann_old <- diffusionMap::diffuse(D)$X
+# For viz
+rbPal <- colorRampPalette(c('red','black'))
+col_new <- rbPal(15)[as.numeric(cut(ann_new[,1],breaks = 15))]
+col_old <- rbPal(15)[as.numeric(cut(ann_old[,1],breaks = 15))]
+# Plot 
+par(mfrow = c(1,2))
+plot(ann_new[,1], ann_new[,2], pch = 20, col = col_new, axes = FALSE, ann = FALSE)
+plot(ann_old[,2], ann_old[,3], pch = 20, col = col_old, axes = FALSE, ann = FALSE)
+```

@@ -1,10 +1,21 @@
 Package: diffuseR
-Title: What the Package Does (one line, title case)
-Version: 0.0.0.9000
-Authors@R: person("First", "Last", email = "first.last@example.com", role = c("aut", "cre"))
-Description: What the package does (one paragraph).
-Depends: R (>= 3.4.3)
-License: What license is it under?
-Encoding: UTF-8
-LazyData: true
-RoxygenNote: 6.0.1
+Type: Package
+Title: What the Package Does in One 'Title Case' Line
+Version: 1.0
+Date: 2018-05-01
+Author: Your Name
+Maintainer: Your Name <your@email.com>
+Description: One paragraph description of what the package does as one or more
+         full sentences.
+License: GPL (>= 2)
+Imports: Rcpp (>= 0.12.14),
+    rARPACK,
+    stats,
+    Matrix,
+    diffusionMap
+LinkingTo: Rcpp
+Suggests: knitr,
+    rmarkdown,
+    testthat
+VignetteBuilder: knitr
+RoxygenNote: 6.0.1.9000

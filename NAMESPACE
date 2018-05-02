@@ -1,0 +1,3 @@
+useDynLib(diffuseR, .registration=TRUE)
+exportPattern("^[[:alpha:]]+")
+importFrom(Rcpp, evalCpp)

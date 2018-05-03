@@ -5,7 +5,3 @@ scaledist <- function(x, scale) {
     .Call(`_diffuseR_scaledist`, x, scale)
 }
 
-rcpp_hello_world <- function() {
-    .Call(`_diffuseR_rcpp_hello_world`)
-}
-

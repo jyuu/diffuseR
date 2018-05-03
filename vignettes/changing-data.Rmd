@@ -26,8 +26,8 @@ Here we seek to reproduce the results from Coifman and Hirn's 2013 paper that ut
 
 ```{r, eval=FALSE, warning=FALSE, message=FALSE}
 # Select two spectral images to compare 
-X <- read.table("/Users/jcahoon/workspace/jyu21ST790/diffuseR/vignettes/hyperspectral/aug.dat", sep = ",")
-Y <- read.table("/Users/jcahoon/workspace/jyu21ST790/diffuseR/vignettes/hyperspectral/oct_chg.dat", sep = ",")
+X <- read.table("/hyperspectral/aug.dat", sep = ",")
+Y <- read.table("/hyperspectral/oct_chg.dat", sep = ",")
 
 # Get diffusion maps using our adapted diffusion maps method or traditional
 D.X <- as.matrix(dist(X))
